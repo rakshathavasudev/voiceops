@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VoiceOps — Call Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #080c0f; color: white; font-family: 'DM Sans', sans-serif; }
+  @keyframes fadeSlideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes bounce { 0%,80%,100% { transform: translateY(0); } 40% { transform: translateY(-5px); } }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes glow { 0%,100% { box-shadow: 0 0 8px rgba(74,222,128,0.3); } 50% { box-shadow: 0 0 20px rgba(74,222,128,0.7); } }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+  .app {
+    min-height: 100vh;
+    background: #080c0f;
+    background-image: radial-gradient(ellipse at 20% 0%, rgba(74,222,128,0.05) 0%, transparent 55%),
+                      radial-gradient(ellipse at 80% 100%, rgba(96,165,250,0.05) 0%, transparent 55%);
+    display: flex; flex-direction: column;
+  }
+
+  .header {
+    padding: 18px 28px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex; align-items: center; justify-content: space-between;
+    background: rgba(255,255,255,0.01);
+    backdrop-filter: blur(10px);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .logo { display: flex; align-items: center; gap: 11px; }
+  .logo-icon {
+    width: 34px; height: 34px; border-radius: 9px;
+    background: linear-gradient(135deg, #4ade80, #22c55e);
+    display: flex; align-items: center; justify-content: center; font-size: 17px;
+    box-shadow: 0 0 18px rgba(74,222,128,0.3);
+  }
+  .logo-text { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 17px; letter-spacing: -0.02em; }
+  .logo-sub { font-size: 10px; color: rgba(255,255,255,0.35); letter-spacing: 0.14em; text-transform: uppercase; font-family: 'DM Mono', monospace; }
+  .live-badge { display: flex; align-items: center; gap: 7px; }
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; animation: pulse 1s infinite; }
+  .live-text { font-family: 'DM Mono', monospace; font-size: 12px; color: #4ade80; }
+
+  .body { display: flex; flex: 1; height: calc(100vh - 72px); }
+
+  /* LEFT PANEL */
+  .left-panel {
+    width: 300px; flex-shrink: 0;
+    border-right: 1px solid rgba(255,255,255,0.06);
+    overflow-y: auto; padding: 22px 18px;
+    display: flex; flex-direction: column; gap: 22px;
+  }
+  .section-label {
+    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: rgba(255,255,255,0.3); margin-bottom: 12px;
+    font-family: 'DM Mono', monospace;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 10px; color: rgba(255,255,255,0.35); letter-spacing: 0.08em; font-family: 'DM Mono', monospace; }
+  .field input, .field select {
+    width: 100%; background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+    color: white; padding: 8px 10px; font-size: 13px;
+    font-family: 'DM Sans', sans-serif; outline: none;
+    transition: border-color 0.2s; color-scheme: dark;
+  }
+  .field input:focus, .field select:focus { border-color: rgba(74,222,128,0.4); }
+  .field select { background: #0f1518; }
+  .field select option { background: #0f1518; }
+
+  .simulate-btn {
+    width: 100%; padding: 13px;
+    background: linear-gradient(135deg, #4ade80, #22c55e);
+    border: none; border-radius: 10px;
+    color: #000; font-family: 'Syne', sans-serif;
+    font-weight: 800; font-size: 14px; letter-spacing: 0.01em;
+    cursor: pointer; transition: all 0.2s;
+    animation: glow 2s infinite;
+  }
+  .simulate-btn:hover { transform: translateY(-1px); filter: brightness(1.1); }
+  .simulate-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; animation: none; }
+  .reset-btn {
+    width: 100%; padding: 13px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+    color: rgba(255,255,255,0.6); font-family: 'Syne', sans-serif;
+    font-weight: 700; font-size: 14px; cursor: pointer; transition: all 0.2s;
+  }
+  .reset-btn:hover { background: rgba(255,255,255,0.08); }
+
+  /* API KEY */
+  .apikey-wrap {
+    background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.2);
+    border-radius: 10px; padding: 12px 14px;
+  }
+  .apikey-wrap label { font-size: 10px; color: #fbbf24; letter-spacing: 0.1em; font-family: 'DM Mono', monospace; display: block; margin-bottom: 6px; }
+  .apikey-wrap input {
+    width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(251,191,36,0.2);
+    border-radius: 6px; color: white; padding: 7px 10px; font-size: 12px;
+    font-family: 'DM Mono', monospace; outline: none;
+  }
+  .apikey-hint { font-size: 10px; color: rgba(255,255,255,0.3); margin-top: 5px; line-height: 1.5; }
+
+  /* RIGHT PANEL */
+  .right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .transcript-area { flex: 1; overflow-y: auto; padding: 24px 28px; display: flex; flex-direction: column; gap: 10px; }
+
+  .empty-state {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px;
+  }
+  .empty-icon { font-size: 52px; }
+  .empty-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 20px; color: rgba(255,255,255,0.5); }
+  .empty-sub { font-size: 13px; color: rgba(255,255,255,0.28); text-align: center; max-width: 300px; line-height: 1.6; }
+  .empty-sub span { color: #4ade80; }
+
+  /* TRANSCRIPT LINES */
+  .system-line {
+    text-align: center; margin: 6px 0;
+    animation: fadeSlideIn 0.4s ease both;
+  }
+  .system-pill {
+    font-size: 11px; letter-spacing: 0.13em; text-transform: uppercase;
+    color: rgba(255,255,255,0.28); font-family: 'DM Mono', monospace;
+    background: rgba(255,255,255,0.04); padding: 4px 13px; border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.07); display: inline-block;
+  }
+  .chat-line {
+    display: flex; gap: 11px;
+    animation: fadeSlideIn 0.4s ease both;
+  }
+  .chat-line.rep { flex-direction: row-reverse; }
+  .avatar {
+    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; color: #000;
+    font-family: 'DM Mono', monospace;
+  }
+  .avatar.agent { background: linear-gradient(135deg, #4ade80, #22c55e); box-shadow: 0 0 12px rgba(74,222,128,0.3); }
+  .avatar.rep { background: linear-gradient(135deg, #60a5fa, #3b82f6); box-shadow: 0 0 12px rgba(96,165,250,0.3); }
+  .bubble-wrap { max-width: 70%; display: flex; flex-direction: column; gap: 3px; }
+  .bubble-wrap.rep { align-items: flex-end; }
+  .speaker-name {
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    font-family: 'DM Mono', monospace;
+  }
+  .speaker-name.agent { color: #4ade80; }
+  .speaker-name.rep { color: #60a5fa; }
+  .bubble {
+    padding: 10px 14px; font-size: 13.5px; line-height: 1.6;
+    color: rgba(255,255,255,0.87);
+  }
+  .bubble.agent {
+    background: rgba(74,222,128,0.07); border: 1px solid rgba(74,222,128,0.18);
+    border-radius: 4px 14px 14px 14px;
+  }
+  .bubble.rep {
+    background: rgba(96,165,250,0.07); border: 1px solid rgba(96,165,250,0.18);
+    border-radius: 14px 4px 14px 14px;
+  }
+
+  /* TYPING */
+  .typing-wrap { display: flex; gap: 11px; }
+  .typing-bubble {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 14px; background: rgba(255,255,255,0.04);
+    border-radius: 10px; border: 1px solid rgba(255,255,255,0.08);
+  }
+  .typing-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: #4ade80;
+    animation: bounce 1.2s infinite;
+  }
+
+  /* SUMMARY */
+  .summary-card {
+    margin-top: 20px; border-radius: 14px; padding: 20px;
+    animation: fadeSlideIn 0.5s ease both;
+  }
+  .summary-card.success { background: rgba(74,222,128,0.05); border: 1px solid rgba(74,222,128,0.2); }
+  .summary-card.denied { background: rgba(248,113,113,0.05); border: 1px solid rgba(248,113,113,0.2); }
+  .summary-card.pending { background: rgba(251,191,36,0.05); border: 1px solid rgba(251,191,36,0.2); }
+  .summary-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .summary-title { font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(255,255,255,0.4); font-family: 'DM Mono', monospace; }
+  .outcome-badge {
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    font-family: 'DM Mono', monospace; border-radius: 20px; padding: 3px 11px;
+    border: 1px solid;
+  }
+  .outcome-badge.success { color: #4ade80; background: rgba(74,222,128,0.1); border-color: rgba(74,222,128,0.3); }
+  .outcome-badge.denied { color: #f87171; background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.3); }
+  .outcome-badge.pending { color: #fbbf24; background: rgba(251,191,36,0.1); border-color: rgba(251,191,36,0.3); }
+  .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .summary-field { display: flex; flex-direction: column; gap: 3px; }
+  .summary-field-label { font-size: 10px; color: rgba(255,255,255,0.3); letter-spacing: 0.1em; text-transform: uppercase; font-family: 'DM Mono', monospace; }
+  .summary-field-value { font-size: 13px; color: rgba(255,255,255,0.85); }
+  .next-steps { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.07); }
+  .next-steps-label { font-size: 10px; color: rgba(255,255,255,0.3); letter-spacing: 0.1em; text-transform: uppercase; font-family: 'DM Mono', monospace; margin-bottom: 5px; }
+  .next-steps-text { font-size: 13px; color: rgba(255,255,255,0.72); line-height: 1.55; }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo">
+      <div class="logo-icon">🎙</div>
+      <div>
+        <div class="logo-text">VoiceOps</div>
+        <div class="logo-sub">Call Simulator</div>
+      </div>
+    </div>
+    <div id="liveBadge" class="live-badge" style="display:none">
+      <div class="live-dot"></div>
+      <span class="live-text" id="timerDisplay">LIVE · 00:00</span>
+    </div>
+  </div>
+
+  <div class="body">
+    <!-- LEFT PANEL -->
+    <div class="left-panel">
+
+      <!-- API KEY -->
+      <div class="apikey-wrap">
+        <label>⚡ Anthropic API Key</label>
+        <input type="password" id="apiKey" placeholder="sk-ant-..." />
+        <div class="apikey-hint">Your key stays in-browser only. Get one at console.anthropic.com</div>
+      </div>
+
+      <!-- PATIENT INFO -->
+      <div>
+        <div class="section-label">Patient Info</div>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div class="field"><label>Patient Name</label><input id="patientName" value="Sarah Mitchell" /></div>
+          <div class="field"><label>Date of Birth</label><input id="dob" type="date" value="1985-03-14" /></div>
+          <div class="field"><label>Member ID</label><input id="memberId" value="UHC9284710" /></div>
+          <div class="field"><label>Provider NPI</label><input id="npi" value="1234567890" /></div>
+        </div>
+      </div>
+
+      <!-- CALL DETAILS -->
+      <div>
+        <div class="section-label">Call Details</div>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div class="field">
+            <label>Insurance Payer</label>
+            <select id="payer">
+              <option>UnitedHealthcare</option><option>Aetna</option><option>Cigna</option>
+              <option>Humana</option><option>BlueCross BlueShield</option><option>Anthem</option>
+              <option>Centene</option><option>Molina Healthcare</option><option>WellCare</option>
+              <option>Kaiser Permanente</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Call Type</label>
+            <select id="callType">
+              <option value="eligibility">Eligibility & Benefits Verification</option>
+              <option value="prior_auth">Prior Authorization</option>
+              <option value="claim_followup">Claim Follow-Up</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Procedure Code</label>
+            <select id="procedure">
+              <option>99213 – Office Visit</option>
+              <option>70553 – MRI Brain w/ Contrast</option>
+              <option>27447 – Total Knee Replacement</option>
+              <option>43239 – Upper GI Endoscopy</option>
+              <option>90837 – Psychotherapy 60 min</option>
+            </select>
+          </div>
+          <div class="field" id="claimField" style="display:none">
+            <label>Claim Number (optional)</label>
+            <input id="claimNumber" placeholder="e.g. CLM-2024-8847" />
+          </div>
+        </div>
+      </div>
+
+      <button class="simulate-btn" id="mainBtn" onclick="handleMain()">▶ Simulate Call</button>
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div class="right-panel">
+      <div class="transcript-area" id="transcriptArea">
+        <div class="empty-state" id="emptyState">
+          <div class="empty-icon">📞</div>
+          <div class="empty-title">Ready to simulate</div>
+          <div class="empty-sub">Fill in the details on the left and hit <span>Simulate Call</span> to watch the AI agent work in real-time.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let running = false;
+  let timerInterval = null;
+  let seconds = 0;
+
+  document.getElementById('callType').addEventListener('change', function() {
+    document.getElementById('claimField').style.display = this.value === 'claim_followup' ? 'flex' : 'none';
+  });
+
+  function tick() {
+    seconds++;
+    const m = String(Math.floor(seconds / 60)).padStart(2,'0');
+    const s = String(seconds % 60).padStart(2,'0');
+    document.getElementById('timerDisplay').textContent = `LIVE · ${m}:${s}`;
+  }
+
+  function handleMain() {
+    if (running) { resetSim(); } else { startSim(); }
+  }
+
+  function resetSim() {
+    running = false;
+    clearInterval(timerInterval);
+    seconds = 0;
+    document.getElementById('liveBadge').style.display = 'none';
+    document.getElementById('mainBtn').textContent = '▶ Simulate Call';
+    document.getElementById('mainBtn').className = 'simulate-btn';
+    document.getElementById('transcriptArea').innerHTML = `
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">📞</div>
+        <div class="empty-title">Ready to simulate</div>
+        <div class="empty-sub">Fill in the details on the left and hit <span>Simulate Call</span> to watch the AI agent work in real-time.</div>
+      </div>`;
+  }
+
+  function appendSystem(text, delay) {
+    return new Promise(resolve => setTimeout(() => {
+      const area = document.getElementById('transcriptArea');
+      const el = document.createElement('div');
+      el.className = 'system-line';
+      el.innerHTML = `<span class="system-pill">${text}</span>`;
+      area.appendChild(el);
+      area.scrollTop = area.scrollHeight;
+      resolve();
+    }, delay));
+  }
+
+  function showTyping() {
+    const area = document.getElementById('transcriptArea');
+    const el = document.createElement('div');
+    el.className = 'typing-wrap'; el.id = 'typingIndicator';
+    const av = document.createElement('div'); av.className = 'avatar agent'; av.textContent = 'AI';
+    const bub = document.createElement('div'); bub.className = 'typing-bubble';
+    [0,1,2].forEach(i => { const d = document.createElement('div'); d.className='typing-dot'; d.style.animationDelay=`${i*0.2}s`; bub.appendChild(d); });
+    el.appendChild(av); el.appendChild(bub);
+    area.appendChild(el); area.scrollTop = area.scrollHeight;
+  }
+
+  function removeTyping() {
+    const t = document.getElementById('typingIndicator');
+    if (t) t.remove();
+  }
+
+  function appendLine(line, idx) {
+    return new Promise(resolve => {
+      const area = document.getElementById('transcriptArea');
+      const isAgent = line.speaker === 'AGENT';
+      const el = document.createElement('div');
+      el.className = `chat-line ${isAgent ? 'agent' : 'rep'}`;
+      el.style.animationDelay = '0s';
+      el.innerHTML = `
+        <div class="avatar ${isAgent ? 'agent' : 'rep'}">${isAgent ? 'AI' : '☎'}</div>
+        <div class="bubble-wrap ${isAgent ? '' : 'rep'}">
+          <span class="speaker-name ${isAgent ? 'agent' : 'rep'}">${isAgent ? 'VoiceOps Agent' : 'Insurance Rep'}</span>
+          <div class="bubble ${isAgent ? 'agent' : 'rep'}">${line.text}</div>
+        </div>`;
+      area.appendChild(el);
+      area.scrollTop = area.scrollHeight;
+      resolve();
+    });
+  }
+
+  function appendSummary(summary) {
+    const area = document.getElementById('transcriptArea');
+    const outcome = (summary.outcome || 'SUCCESS').toUpperCase();
+    const cls = outcome === 'SUCCESS' ? 'success' : outcome === 'DENIED' ? 'denied' : 'pending';
+    const fieldsHtml = (summary.fields || []).map(f => `
+      <div class="summary-field">
+        <span class="summary-field-label">${f.label}</span>
+        <span class="summary-field-value">${f.value}</span>
+      </div>`).join('');
+    const nextHtml = summary.nextSteps ? `
+      <div class="next-steps">
+        <div class="next-steps-label">Next Steps</div>
+        <div class="next-steps-text">${summary.nextSteps}</div>
+      </div>` : '';
+    const el = document.createElement('div');
+    el.className = `summary-card ${cls}`;
+    el.innerHTML = `
+      <div class="summary-header">
+        <span class="summary-title">Call Summary</span>
+        <span class="outcome-badge ${cls}">${outcome}</span>
+      </div>
+      <div class="summary-grid">${fieldsHtml}</div>
+      ${nextHtml}`;
+    area.appendChild(el);
+    area.scrollTop = area.scrollHeight;
+  }
+
+  async function startSim() {
+    const apiKey = document.getElementById('apiKey').value.trim();
+    if (!apiKey) { alert('Please enter your Anthropic API key first.'); return; }
+
+    running = true;
+    seconds = 0;
+    document.getElementById('liveBadge').style.display = 'flex';
+    document.getElementById('mainBtn').textContent = '⏸ Running...';
+    document.getElementById('mainBtn').disabled = true;
+    timerInterval = setInterval(tick, 1000);
+
+    // Clear area
+    document.getElementById('transcriptArea').innerHTML = '';
+
+    const payer = document.getElementById('payer').value;
+    const callType = document.getElementById('callType').value;
+    const callTypeLabel = { eligibility: 'Eligibility & Benefits Verification', prior_auth: 'Prior Authorization', claim_followup: 'Claim Follow-Up' }[callType];
+    const patientName = document.getElementById('patientName').value;
+    const dob = document.getElementById('dob').value;
+    const memberId = document.getElementById('memberId').value;
+    const npi = document.getElementById('npi').value;
+    const procedure = document.getElementById('procedure').value;
+    const claimNumber = document.getElementById('claimNumber')?.value || '';
+
+    await appendSystem(`Dialing ${payer} Provider Services...`, 300);
+    await new Promise(r => setTimeout(r, 700));
+    await appendSystem('Connected · IVR System', 0);
+
+    const prompt = `You are simulating a realistic healthcare RCM phone call between an AI voice agent (VoiceOps) and an insurance company representative.
+
+The AI agent is calling ${payer} to handle: ${callTypeLabel}
+
+Patient: ${patientName}, DOB: ${dob}, Member ID: ${memberId}
+Procedure: ${procedure}, Provider NPI: ${npi}${claimNumber ? `, Claim #: ${claimNumber}` : ''}
+
+Generate a realistic transcript with 10-14 exchanges. Include IVR navigation and hold times as SYSTEM entries.
+
+Return ONLY valid JSON (no markdown, no backticks):
+{
+  "transcript": [
+    {"speaker": "SYSTEM", "text": "Press 1 for eligibility..."},
+    {"speaker": "AGENT", "text": "..."},
+    {"speaker": "REP", "text": "..."}
+  ],
+  "summary": {
+    "outcome": "SUCCESS",
+    "fields": [
+      {"label": "Coverage Status", "value": "Active"},
+      {"label": "Deductible Met", "value": "$800 / $2,000"},
+      {"label": "Copay", "value": "$30"},
+      {"label": "Auth Required", "value": "No"},
+      {"label": "Call Duration", "value": "7 min 22 sec"},
+      {"label": "Rep Name", "value": "Jessica M."}
+    ],
+    "nextSteps": "Coverage confirmed. Proceed with appointment scheduling."
+  }
+}`;
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1500,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error?.message || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      const text = data.content?.map(b => b.text || '').join('') || '';
+      const clean = text.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+
+      // Stream transcript lines
+      for (let i = 0; i < parsed.transcript.length; i++) {
+        const line = parsed.transcript[i];
+        if (line.speaker === 'SYSTEM') {
+          await appendSystem(line.text, 200);
+          await new Promise(r => setTimeout(r, 500));
+        } else {
+          showTyping();
+          await new Promise(r => setTimeout(r, 850));
+          removeTyping();
+          await appendLine(line, i);
+          await new Promise(r => setTimeout(r, 120));
+        }
+      }
+
+      clearInterval(timerInterval);
+      document.getElementById('liveBadge').style.display = 'none';
+      appendSummary(parsed.summary);
+
+    } catch (err) {
+      clearInterval(timerInterval);
+      document.getElementById('liveBadge').style.display = 'none';
+      appendSystem(`Error: ${err.message}`, 0);
+    }
+
+    running = true;
+    document.getElementById('mainBtn').textContent = '↺ New Call';
+    document.getElementById('mainBtn').className = 'reset-btn';
+    document.getElementById('mainBtn').disabled = false;
+  }
+</script>
+</body>
+</html>
