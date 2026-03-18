@@ -161,11 +161,5 @@ Please keep all logic in the single HTML file to preserve the zero-dependency de
 
 ## License
 
-MIT © Your Name
+MIT © Rakshatha
 
----
-
-## Acknowledgements
-
-- Built with the [Anthropic Claude API](https://docs.anthropic.com)
-- Fonts: [DM Sans](https://fonts.google.com/specimen/DM+Sans), [DM Mono](https://fonts.google.com/specimen/DM+Mono), [Syne](https://fonts.google.com/specimen/Syne) via Google Fonts
