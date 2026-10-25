@@ -1,165 +1,105 @@
-# VoiceOps — Insurance Call Simulator
+# VoiceOps: AI agents that complete property-management workflows
 
-A single-file, browser-based AI tool that simulates realistic healthcare Revenue Cycle Management (RCM) phone calls between an AI voice agent and an insurance company representative. Powered by the Anthropic Claude API (claude-sonnet-4).
+VoiceOps is a working voice and messaging agent for a property manager. It handles resident and prospect conversations over **phone, SMS, web chat and email**, and completes real operational workflows against a **legacy system of record**: collections and payment plans, payment links, lease renewals, tour booking and lead follow-up.
 
-![VoiceOps Screenshot](./screenshot.png)
+The interesting part is everything around the model:
+
+- **Guardrails in code, not in the prompt.** Identity verification, two-step confirmation that checks the user's own words, policy limits, idempotency, scope limits and human escalation.
+- **Legacy integration that survives a bad day.** OAuth refresh, timeouts, retries with backoff, a circuit breaker, typed validation of a messy vendor API, and durable writes through an outbox.
+- **One conversation across channels.** A call can continue over SMS without verifying again.
+- **Compliant outbound.** Consent, quiet hours in the resident's time zone, frequency caps and dispute holds.
+- **Evals, tracing and metrics.** 17 graded scenarios, task success, containment, escalation precision/recall, latency, cost per conversation, and a regression gate in CI.
+
+![VoiceOps console](docs/console.png)
+
+It runs fully offline with no API keys. A deterministic scripted model stands in for the LLM, and the legacy PMS is mocked, so you can demo it anywhere. Set `ANTHROPIC_API_KEY` to run the same agent on Claude, and add Twilio credentials to take real phone calls.
+
+> The original single-file insurance call simulator (v1) is still here: [`insurance-call-simulator.html`](insurance-call-simulator.html).
 
 ---
 
-## Features
-
-- **Three call types** — Eligibility & Benefits Verification, Prior Authorization, and Claim Follow-Up
-- **10 major payers** — UnitedHealthcare, Aetna, Cigna, Humana, BlueCross BlueShield, Anthem, Centene, Molina Healthcare, WellCare, Kaiser Permanente
-- **Realistic IVR simulation** — System messages for hold times and IVR navigation are streamed inline with the transcript
-- **Live call timer** — Animated LIVE badge counts call duration in real time
-- **Animated transcript** — Turn-by-turn dialogue streams with typing indicators between each exchange
-- **AI-generated call summary** — Auto-structured outcome card (SUCCESS / DENIED / PENDING) with key fields (deductible, copay, auth status, rep name, etc.) and recommended next steps
-- **Zero dependencies** — Pure HTML, CSS, and vanilla JavaScript; no build step, no package manager
-- **API key stays in-browser** — The Anthropic API key is never sent anywhere except directly to `api.anthropic.com`
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- A modern web browser (Chrome, Firefox, Safari, Edge)
-- An [Anthropic API key](https://console.anthropic.com)
-
-### Running locally
+## Quickstart
 
 ```bash
-# Clone the repo
-git clone https://github.com/YOUR_USERNAME/voiceops-call-simulator.git
-cd voiceops-call-simulator
-
-# Open directly in your browser — no server needed
-open insurance-call-simulator.html
+pip install -r requirements.txt
+python -m voiceops            # console at http://localhost:8000 (mock PMS on :8001)
 ```
 
-Or simply double-click `insurance-call-simulator.html` in your file manager.
+Open the console in Chrome, pick **Maria Lopez · Unit 4B**, press **Start conversation**, click the mic and say *"This is Maria Lopez in unit 4B. Can I split my balance into three payments?"*
 
-### Deploying (optional)
-
-Because this is a single static HTML file you can host it anywhere:
-
-| Platform | Command / Method |
+| Run with | How |
 |---|---|
-| **GitHub Pages** | Push to `main`, enable Pages → `/ (root)` |
-| **Netlify** | Drag-and-drop the file into the Netlify dashboard |
-| **Vercel** | `vercel --prod` from the project directory |
-| **Any static host** | Upload `insurance-call-simulator.html` as `index.html` |
+| Offline (default) | nothing to configure; the scripted model drives the same tools and guardrails |
+| Claude | `export ANTHROPIC_API_KEY=...` (optional: `VOICEOPS_MODEL=claude-sonnet-5-5`, `VOICEOPS_EFFORT=low\|medium`) |
+| Real phone + SMS | Point a Twilio number's voice webhook at `POST {PUBLIC_BASE_URL}/twilio/voice` and SMS at `/twilio/sms`; set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `PUBLIC_BASE_URL` (e.g. an ngrok URL). Signatures are validated when the auth token is set. |
+| Frozen clock for demos | `VOICEOPS_NOW=2026-10-27T10:00:00-07:00` (quiet hours and dates become reproducible) |
 
----
-
-## Usage
-
-1. Open the file in your browser.
-2. Paste your Anthropic API key into the **API Key** field (it is stored only in memory for the session).
-3. Fill in **Patient Info** — name, date of birth, member ID, and provider NPI.
-4. Select the **Insurance Payer**, **Call Type**, and **Procedure Code**.
-5. If the call type is *Claim Follow-Up*, an optional claim number field will appear.
-6. Click **▶ Simulate Call** and watch the transcript stream in real time.
-7. After the call completes, review the **Call Summary** card for outcomes and next steps.
-8. Click **↺ New Call** to reset and run another simulation.
-
----
-
-## Project Structure
-
-```
-voiceops-call-simulator/
-├── insurance-call-simulator.html   # Entire application — HTML + CSS + JS
-├── README.md
-├── .gitignore
-└── screenshot.png                  # (optional) UI preview for README
+```bash
+python -m pytest -q                                   # 39 unit tests
+python -m voiceops.evals                              # 17 eval scenarios, offline
+python -m voiceops.evals --provider claude --trials 3 # the real agent, pass^k over 3 trials
+python -m voiceops.evals --compare evals/baseline.scripted.json   # regression gate (CI)
 ```
 
-All application logic lives in a single file:
-
-| Section | Lines | Description |
-|---|---|---|
-| `<style>` | 1–203 | Dark-theme UI, animations, layout |
-| HTML markup | 204–296 | Header, left config panel, right transcript panel |
-| `<script>` | 298–521 | State management, Claude API call, transcript streaming, summary rendering |
+The interview walkthrough is in **[docs/DEMO.md](docs/DEMO.md)**. Design notes are in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ---
 
-## How It Works
+## How a turn works
 
-1. The user fills in patient and call details in the left panel.
-2. On **Simulate Call**, the app constructs a detailed prompt describing the call scenario and sends it to `POST https://api.anthropic.com/v1/messages` using `claude-sonnet-4-20250514`.
-3. Claude returns a structured JSON object containing a `transcript` array and a `summary` object.
-4. The app iterates over the transcript array, rendering SYSTEM lines as pill badges and AGENT/REP lines as chat bubbles with animated typing indicators between turns.
-5. Once all lines are rendered, the summary card is appended with the outcome badge and extracted fields.
-
-### Prompt structure
-
-```
-Transcript entries use three speaker values:
-  SYSTEM  → IVR prompts, hold music notices, connection events
-  AGENT   → VoiceOps AI agent dialogue
-  REP     → Insurance representative dialogue
-
-Summary fields returned:
-  outcome      → SUCCESS | DENIED | PENDING
-  fields[]     → label/value pairs (coverage, deductible, copay, auth, duration, rep)
-  nextSteps    → Plain-text recommended action
+```mermaid
+flowchart LR
+  subgraph Channels
+    V[Voice: browser mic / Twilio] --> R
+    S[SMS: Twilio / simulator] --> R
+    W[Web chat] --> R
+    E[Email inbound] --> R
+  end
+  R[Resolve contact to open case<br/>shared across channels] --> P[Redact card numbers / SSNs]
+  P --> H{Hard triggers<br/>emergency, opt-out, legal,<br/>dispute, human request}
+  H -- yes --> X[Escalate / reply<br/>no model call]
+  H -- no --> L[Model + tools loop<br/>budgets, traced]
+  L --> T[Tool layer<br/>verification, scope, policy,<br/>confirmation check]
+  T --> C[PMS client<br/>auth, retries, breaker,<br/>validation, outbox]
+  C --> PMS[(Legacy PMS<br/>system of record)]
+  T --> A[(Audit log<br/>hash-chained)]
+  L --> G[Output guard<br/>no account data before verification]
+  G --> O[Reply on the same channel]
 ```
 
----
+## What maps to what
 
-## Configuration
+| What the role needs | Where it lives |
+|---|---|
+| Agents that complete workflows and write to a system of record with an audit trail | [`agent/tools.py`](voiceops/agent/tools.py) (prepare/commit writes), [`store.py`](voiceops/store.py) (hash-chained audit log) |
+| Shared state across voice, SMS, web chat and email | [`agent/runtime.py`](voiceops/agent/runtime.py) `conversation_for` + contact index, history rebuilt per turn in [`agent/prompts.py`](voiceops/agent/prompts.py) |
+| Compliant outbound for collections, abandoned applications, leads and renewals | [`campaigns.py`](voiceops/campaigns.py) |
+| Guardrails for payments and tenant records (confirmation, idempotency, scope, escalation) | [`agent/guardrails.py`](voiceops/agent/guardrails.py), [`agent/tools.py`](voiceops/agent/tools.py), tests in [`tests/test_guardrails.py`](tests/test_guardrails.py) |
+| Legacy API integration (auth, retries, timeouts, validation, durable writes) | [`integrations/pms_client.py`](voiceops/integrations/pms_client.py) against [`legacy_pms/app.py`](voiceops/legacy_pms/app.py) |
+| Evaluation sets, regression runs, tracing, operational metrics | [`evals/scenarios.yaml`](evals/scenarios.yaml), [`evals.py`](voiceops/evals.py), [`tracing.py`](voiceops/tracing.py), [`metrics.py`](voiceops/metrics.py), [CI](.github/workflows/ci.yml) |
+| Tool calling, RAG, structured outputs, context management | strict JSON-schema tools, [`agent/knowledge.py`](voiceops/agent/knowledge.py) (policy retrieval), prompt caching + compacted history in [`agent/prompts.py`](voiceops/agent/prompts.py) |
+| Telephony, messaging providers, PCI-scoped payments, consent | [`integrations/twilio.py`](voiceops/integrations/twilio.py), payment links instead of card capture, consent table and STOP handling |
+| Tenant-specific configuration | [`config/orgs/harborview.json`](config/orgs/harborview.json) and [`config/knowledge/harborview.md`](config/knowledge/harborview.md) |
 
-All configurable values are in the HTML form. To add payers or procedure codes, edit the `<select>` elements:
+## Project layout
 
-```html
-<!-- Add a payer -->
-<select id="payer">
-  <option>UnitedHealthcare</option>
-  <option>Your New Payer</option>   <!-- ← add here -->
-</select>
-
-<!-- Add a procedure code -->
-<select id="procedure">
-  <option>99213 – Office Visit</option>
-  <option>XXXXX – Your Procedure</option>   <!-- ← add here -->
-</select>
+```
+voiceops/
+  agent/          runtime loop, tools, guardrails, prompts, retrieval, Claude + scripted models
+  integrations/   legacy PMS client, Twilio helpers
+  legacy_pms/     mock vendor API with fault injection (the system of record)
+  campaigns.py    outbound workflows + compliance gate
+  store.py        agent-side state: conversations, audit log, outbox, consent, traces
+  server.py       channel webhooks + console API
+  evals.py        eval runner and regression gate
+config/           per-org policy and handbook
+evals/            scenarios, baseline, reports
+web/console.html  operator console (voice via Web Speech API)
+tests/            unit tests, including a misbehaving-model suite
 ```
 
-To change the Claude model or max token budget, update the `fetch` body in `startSim()`:
+## Security notes
 
-```javascript
-body: JSON.stringify({
-  model: 'claude-sonnet-4-20250514',   // swap model here
-  max_tokens: 1500,                     // increase for longer transcripts
-  ...
-})
-```
-
----
-
-## Security Notes
-
-- **API key is never persisted.** It lives only in the DOM `<input>` element for the duration of the browser session.
-- **Direct browser API access** is enabled via the `anthropic-dangerous-direct-browser-access: true` header, which is required for client-side calls. This is appropriate for local/demo use. For production deployments, proxy the API call through your own backend so the key is never exposed client-side.
-- This tool does not transmit any patient data to third parties. All data goes directly from your browser to `api.anthropic.com` and is not stored.
-
----
-
-## Contributing
-
-1. Fork the repo
-2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Commit your changes: `git commit -m "feat: add my feature"`
-4. Push: `git push origin feature/my-feature`
-5. Open a Pull Request
-
-Please keep all logic in the single HTML file to preserve the zero-dependency design.
-
----
-
-## License
-
-MIT © Rakshatha
-
+- The agent never handles card data. Payments go through a secure link; card numbers, CVVs and SSNs are redacted before text reaches the model, logs, traces or storage (an eval checks every table).
+- Caller ID and sender address identify a person but never verify them. Account tools require `verify_identity`, and an output guard blocks account figures in replies to unverified callers.
+- Twilio webhooks are signature-checked when `TWILIO_AUTH_TOKEN` is set. The console API has no auth: it is a local demo tool and must not be exposed publicly as-is.

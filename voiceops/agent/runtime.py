@@ -213,6 +213,11 @@ class AgentRuntime:
             tools._escalate(ctx, "emergency", trig.reason, summary)
             return (f"That sounds like an emergency. Please call our 24/7 emergency maintenance line at {org['emergency_maintenance_phone']} now"
                     f"{', and 911 first if there is fire or a gas smell' if channel != 'email' else ''}. I've also alerted the on-call team.")
+        if trig.category == "opt_in":
+            if ctx.conv["subject_id"]:
+                self.s.store.set_consent(ctx.conv["subject_id"], "sms", "granted", "keyword:sms")
+                ctx.audit("consent.granted", {"channel": "sms", "source": trig.reason}, "success")
+            return f"You're resubscribed to {org['display_name']} texts. Reply STOP at any time to opt out."
         if trig.category == "opt_out":
             target = {"sms": "sms", "email": "email"}.get(channel, "voice")
             if ctx.conv["subject_id"]:

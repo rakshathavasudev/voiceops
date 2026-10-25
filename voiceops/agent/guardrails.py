@@ -80,6 +80,8 @@ _PATTERNS: list[tuple[str, re.Pattern]] = [
 def hard_trigger(text: str, channel: str) -> Trigger | None:
     if channel == "sms" and text.strip().lower().strip(".!") in _SMS_STOP:
         return Trigger("opt_out", "carrier opt-out keyword")
+    if channel == "sms" and text.strip().lower().strip(".!") in ("start", "unstop"):
+        return Trigger("opt_in", "carrier opt-in keyword")
     for category, pattern in _PATTERNS:
         m = pattern.search(text)
         if m:

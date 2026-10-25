@@ -13,7 +13,7 @@ def main() -> None:
     pms_port = int(os.environ.get("PMS_PORT", "8001"))
     port = int(os.environ.get("PORT", "8000"))
     os.environ.setdefault("PMS_BASE_URL", f"http://127.0.0.1:{pms_port}")
-    pms = uvicorn.Server(uvicorn.Config("voiceops.legacy_pms.app:app", host="127.0.0.1", port=pms_port, log_level="warning"))
+    pms = uvicorn.Server(uvicorn.Config("voiceops.legacy_pms.app:app", host="127.0.0.1", port=pms_port, log_level="warning", access_log=False))
     threading.Thread(target=pms.run, daemon=True).start()
     for _ in range(50):
         try:

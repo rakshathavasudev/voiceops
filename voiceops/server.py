@@ -3,6 +3,7 @@ and admin hooks for demos. Run everything with `python -m voiceops`."""
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
@@ -13,6 +14,7 @@ from voiceops.bootstrap import build_runtime
 from voiceops.config import ROOT, settings as load_settings
 from voiceops.integrations import twilio
 from voiceops.integrations.pms_client import PMSError
+from voiceops.messaging import ConsentError
 
 WEB = ROOT / "web"
 
@@ -63,6 +65,12 @@ def create_app(rt: AgentRuntime | None = None) -> FastAPI:
     @app.get("/")
     def console():
         return FileResponse(WEB / "console.html")
+
+    @app.get("/api/info")
+    def info():
+        st = s.settings
+        return {"provider": "scripted" if getattr(s.model, "model", "") == "scripted" else "claude",
+                "model": getattr(s.model, "model", None), "effort": st.effort if st else None, "org": s.org["display_name"]}
 
     @app.get("/api/subjects")
     def subjects():
@@ -168,7 +176,9 @@ def create_app(rt: AgentRuntime | None = None) -> FastAPI:
 
     @app.get("/api/conversations/{cid}")
     def conversation(cid: str):
-        return {"conversation": s.store.get_conversation(cid), "messages": s.store.messages(cid, 200),
+        conv = s.store.get_conversation(cid)
+        conv["verified"] = bool(conv["verified_until"]) and datetime.fromisoformat(conv["verified_until"]) > clock.now()
+        return {"conversation": conv, "messages": s.store.messages(cid, 200),
                 "events": s.store.events(cid, 100),
                 "turns": s.store.q("SELECT * FROM turns WHERE conversation_id=? ORDER BY started_at", cid),
                 "escalations": s.store.q("SELECT * FROM escalations WHERE conversation_id=?", cid)}
@@ -211,7 +221,22 @@ def create_app(rt: AgentRuntime | None = None) -> FastAPI:
         for r in results:
             if r["status"] == "committed" and r.get("conversation_id"):
                 s.store.audit(s.org_id, "worker:outbox", f"{r['op']}.committed", r["conversation_id"], {"response": r["response"], "deferred": True}, "committed", r["key"])
+                notify_deferred_commit(r)
         return {"results": results}
+
+    def notify_deferred_commit(r: dict) -> None:
+        """Keep the promise the agent made when the write was queued: confirm by text once it lands."""
+        conv = s.store.get_conversation(r["conversation_id"])
+        label = r["op"].replace("_", " ")
+        url = (r.get("response") or {}).get("Url")
+        msg = f"{s.org['display_name']}: your {label} has been processed." + (f" Pay securely here: {url}" if url else "") + " Reply here with any questions."
+        s.store.add_message(conv["id"], None, "sms", "assistant", msg)
+        s.store.add_event(conv["id"], None, f"{r['op']}_committed", {"deferred": True, "response": r.get("response")})
+        try:
+            subject = s.pms.get_resident(conv["subject_id"]) if conv["subject_type"] == "resident" else s.pms.get_prospect(conv["subject_id"])
+            s.messenger.send(conv["id"], conv["subject_id"], "sms", subject.Phone, msg, transactional=True)
+        except (PMSError, ConsentError):
+            pass
 
     @app.get("/api/metrics")
     def get_metrics():
