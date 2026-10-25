@@ -24,6 +24,8 @@ _NOT_NAMES = {"in", "from", "at", "and", "unit", "apartment", "calling", "here",
 
 INTENTS = [
     ("injection", r"ignore (all |your |previous |prior )*(instructions|rules)|mark .{0,30}(paid|zero)|system prompt|you are now"),
+    # Policy nouns win over "pay": "what's the late fee if I pay late?" is a question, not a payment request.
+    ("policy", r"late fee|\bfees?\b|\bpets?\b|parking|office hours|\bpolicy\b|application fee"),
     ("plan", r"\bplan\b|split|installment|can'?t pay|cannot pay|over \w+ months|in (two|three|four|\d) (payments|parts)|(two|three|four|\d+) payments"),
     ("pay", r"\bpay\b|payment link|\blink\b|in full"),
     ("balance", r"balance|how much|\bowe\b|what do i owe|account"),

@@ -21,6 +21,7 @@ from voiceops import clock
 from voiceops.agent import prompts, tools
 from voiceops.agent.guardrails import hard_trigger, is_negative, redact
 from voiceops.agent.llm import Usage
+from voiceops.integrations.pms_client import PMSError
 
 MAX_MODEL_CALLS = 6
 MAX_TOOL_CALLS = 8
@@ -60,30 +61,49 @@ class AgentRuntime:
 
     # ---------------- identity resolution & conversations ----------------
 
-    def resolve_subject(self, channel: str, address: str | None) -> tuple[str, str | None, str]:
+    def resolve_subject(self, channel: str, address: str | None) -> tuple[str, str | None, str, list[str]]:
         """Map a phone number / email to a resident or prospect. Matching contact info identifies,
         it does not verify: residents still pass verify_identity before account access."""
         if not address:
-            return "resident", None, "Unknown caller"
-        key = {"email": "email"}.get(channel, "phone")
+            return "resident", None, "Unknown caller", []
+        key = "email" if "@" in address else "phone"
         residents = self.s.pms.find_residents(**{key: address})
         if residents:
             r = residents[0]
-            return "resident", r.ResidentID, f"{r.FirstName} {r.LastName}"
+            return "resident", r.ResidentID, f"{r.FirstName} {r.LastName}", [r.Phone, r.Email or ""]
         prospects = self.s.pms.find_prospects(**{key: address})
         if prospects:
             p = prospects[0]
-            return "prospect", p.ProspectID, f"{p.FirstName} {p.LastName}"
-        return "resident", None, "Unknown caller"
+            return "prospect", p.ProspectID, f"{p.FirstName} {p.LastName}", [p.Phone, p.Email or ""]
+        return "resident", None, "Unknown caller", [address]
 
     def conversation_for(self, channel: str, address: str | None, purpose: str = "inbound") -> dict:
-        stype, sid, name = self.resolve_subject(channel, address)
+        """Find the open case for this contact on any channel, or open one. The contact index lets an
+        SMS reply land in the same conversation as the phone call, without a PMS round trip."""
+        store = self.s.store
+        if address:
+            rows = store.q("SELECT c.* FROM contact_index ci JOIN conversations c ON c.id=ci.conversation_id "
+                           "WHERE ci.address=? AND c.status IN ('active','escalated') ORDER BY c.updated_at DESC LIMIT 1",
+                           address.lower())
+            if rows:
+                if purpose != "inbound" and rows[0]["purpose"] == "inbound":
+                    store.update_conversation(rows[0]["id"], purpose=purpose)
+                return store.get_conversation(rows[0]["id"])
+        try:
+            stype, sid, name, contacts = self.resolve_subject(channel, address)
+        except PMSError:
+            # System of record down: still answer, as an unidentified caller who can verify later.
+            stype, sid, name, contacts = "resident", None, "Unknown caller", [address] if address else []
         if sid is None:
-            # Anonymous inbound: a fresh case each time; it binds to a resident once verified.
-            conv = self.s.store.open_conversation(self.s.org_id, stype, f"anon-{uuid.uuid4().hex[:6]}", name, purpose)
-            self.s.store.update_conversation(conv["id"], subject_id=None)
-            return self.s.store.get_conversation(conv["id"])
-        return self.s.store.open_conversation(self.s.org_id, stype, sid, name, purpose)
+            # Anonymous inbound: a fresh case; it binds to a resident once verified.
+            conv = store.open_conversation(self.s.org_id, stype, f"anon-{uuid.uuid4().hex[:6]}", name, purpose)
+            store.update_conversation(conv["id"], subject_id=None)
+        else:
+            conv = store.open_conversation(self.s.org_id, stype, sid, name, purpose)
+        for c in contacts:
+            if c:
+                store.x("INSERT OR REPLACE INTO contact_index(address, conversation_id) VALUES (?,?)", c.lower(), conv["id"])
+        return store.get_conversation(conv["id"])
 
     def opening_message(self, conv: dict, channel: str) -> str:
         org = self.s.org
@@ -138,10 +158,16 @@ class AgentRuntime:
                 result_path = "escalated_case" if reply.startswith("\x00") else "hard_trigger"
                 reply = reply.lstrip("\x00")
             else:
-                reply, llm_calls, tool_names, tool_errors = self._model_loop(ctx, flags, usage)
-                reply, guarded = self._output_guard(ctx, reply)
-                if guarded:
-                    result_path = "guard"
+                try:
+                    reply, llm_calls, tool_names, tool_errors = self._model_loop(ctx, flags, usage)
+                    reply, guarded = self._output_guard(ctx, reply)
+                    if guarded:
+                        result_path = "guard"
+                except Exception as exc:  # model outage, malformed response: degrade to a human, never to silence
+                    root.set(error=f"{type(exc).__name__}: {exc}")
+                    tools._escalate(ctx, "technical", f"agent error: {type(exc).__name__}", "The assistant hit an internal error mid-conversation.")
+                    reply = f"I'm sorry, I'm having trouble on my end. I've asked our leasing office to follow up, or you can call {s.org['office_phone']}."
+                    result_path = "error"
 
             conv = s.store.get_conversation(conversation_id)
             escalated = conv["status"] == "escalated"
@@ -259,8 +285,14 @@ class AgentRuntime:
         reply, found = redact(reply)
         ctx.refresh()
         if ctx.conv["subject_type"] == "resident" and ctx.conv["subject_id"] and not ctx.verified():
-            ledger = self.s.pms.ledger(ctx.conv["subject_id"])
-            lease = self.s.pms.lease(ctx.conv["subject_id"])
+            try:
+                ledger = self.s.pms.ledger(ctx.conv["subject_id"])
+                lease = self.s.pms.lease(ctx.conv["subject_id"])
+            except PMSError:
+                # Can't fetch the figures to compare against, so fail closed on any dollar amount.
+                if re.search(r"\$\s?\d", reply):
+                    return "Before I can discuss account details, I need to verify your identity. What's your last name and unit number?", True
+                return reply, bool(found)
             secrets = {f"{v:,.2f}" for v in (ledger.BalanceDue, lease.MonthlyRent) if v} | {f"{v:.2f}" for v in (ledger.BalanceDue, lease.MonthlyRent) if v}
             secrets |= {s.removesuffix(".00") for s in secrets}
             digits = reply.replace("$", "")

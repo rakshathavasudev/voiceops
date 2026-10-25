@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS turns(
   turn_id TEXT PRIMARY KEY, conversation_id TEXT, channel TEXT, started_at TEXT, latency_ms REAL,
   llm_calls INTEGER, input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER,
   cost_usd REAL, model TEXT, escalated INTEGER, blocked_actions INTEGER, tool_errors INTEGER);
+CREATE TABLE IF NOT EXISTS contact_index(address TEXT PRIMARY KEY, conversation_id TEXT);
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, id);
 CREATE INDEX IF NOT EXISTS idx_spans_trace ON spans(trace_id);
 """
