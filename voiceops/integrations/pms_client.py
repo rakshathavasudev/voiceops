@@ -238,6 +238,9 @@ class PMSClient:
     def find_prospects(self, phone: str | None = None, email: str | None = None) -> list[Prospect]:
         return [Prospect(**p) for p in self.get("/api/v1/prospects", phone=phone, email=email)["Prospects"]]
 
+    def get_prospect(self, pid: str) -> Prospect:
+        return Prospect(**self.get(f"/api/v1/prospects/{pid}"))
+
     def tour_slots(self) -> list[TourSlot]:
         return [TourSlot(**s) for s in self.get("/api/v1/tour-slots")["Slots"]]
 

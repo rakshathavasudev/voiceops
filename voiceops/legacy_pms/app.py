@@ -247,6 +247,13 @@ def create_app(pms: PMS | None = None) -> FastAPI:
                                "Phone": r["phone"], "Email": r["email"], "Interest": r["interest"], "Status": r["status"],
                                "LastContact": r["last_contact"]} for r in rows]}
 
+    @app.get("/api/v1/prospects/{pid}", dependencies=[Depends(auth)])
+    def get_prospect(pid: str):
+        found = [p for p in prospects(None, None)["Prospects"] if p["ProspectID"] == pid]
+        if not found:
+            raise HTTPException(404, {"ErrorCode": "NOT_FOUND", "Message": f"Prospect {pid} not found"})
+        return found[0]
+
     @app.get("/api/v1/tour-slots", dependencies=[Depends(auth)])
     def tour_slots():
         rows = pms.q("SELECT * FROM tour_slots WHERE booked_by IS NULL ORDER BY starts_at")
