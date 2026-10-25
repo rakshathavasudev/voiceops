@@ -1,0 +1,39 @@
+{
+  "org_id": "harborview",
+  "display_name": "Harborview Apartments",
+  "agent_name": "Ava",
+  "timezone": "America/Los_Angeles",
+  "office_phone": "+12065550100",
+  "emergency_maintenance_phone": "+12065550199",
+  "recording_disclosure": "This call may be recorded for quality and training.",
+  "collections_disclosure": "This is Harborview Apartments calling about your rent account.",
+  "payments": {
+    "max_single_payment": 5000.00,
+    "payment_link_ttl_hours": 24,
+    "accepted_methods": ["card", "ACH"]
+  },
+  "payment_plans": {
+    "max_installments": 3,
+    "max_days_to_final_installment": 60,
+    "min_first_installment_pct": 0.25,
+    "allow_fee_waivers": false
+  },
+  "verification": {
+    "factors": ["last_name", "unit_number"],
+    "max_attempts": 2,
+    "session_minutes": 30
+  },
+  "outbound": {
+    "quiet_hours_start": "21:00",
+    "quiet_hours_end": "08:00",
+    "max_attempts_per_7_days": 3,
+    "collections_min_days_past_due": 5,
+    "renewal_window_days": 90,
+    "lead_followup_after_hours": 24
+  },
+  "escalation": {
+    "max_turns": 16,
+    "max_unhandled_turns": 2,
+    "queue": "harborview-leasing-office"
+  }
+}
