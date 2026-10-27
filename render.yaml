@@ -1,0 +1,31 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# One web service runs both the agent platform and the mock legacy PMS (on an internal port).
+services:
+  - type: web
+    name: voiceops
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m voiceops
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.0
+      - key: HOST
+        value: 0.0.0.0
+      # The console and its API sit behind HTTP basic auth (any username) when this is set.
+      - key: DEMO_PASSWORD
+        sync: false
+      # Leave empty to run the offline scripted model; set it to use Claude.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Optional: real phone calls and texts. Point the Twilio number's voice webhook at
+      # <PUBLIC_BASE_URL>/twilio/voice and its messaging webhook at <PUBLIC_BASE_URL>/twilio/sms.
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM_NUMBER
+        sync: false
