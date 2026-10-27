@@ -1,5 +1,7 @@
 # VoiceOps: AI agents that complete property-management workflows
 
+**Live demo: [voiceops-1ayi.onrender.com](https://voiceops-1ayi.onrender.com/)**. It runs the offline scripted model with a mocked legacy system, and it is on Render's free plan, so the first load can take about a minute while it wakes up. Use Chrome for the voice mic.
+
 VoiceOps is a working voice and messaging agent for a property manager. It handles resident and prospect conversations over **phone, SMS, web chat and email**, and completes real operational workflows against a **legacy system of record**: collections and payment plans, payment links, lease renewals, tour booking and lead follow-up.
 
 The interesting part is everything around the model:
