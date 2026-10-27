@@ -116,7 +116,7 @@ def money(v) -> Decimal:
     try:
         d = Decimal(str(v)).quantize(Decimal("0.01"))
     except (InvalidOperation, ValueError):
-        raise PolicyViolation(f"'{v}' is not a valid amount")
+        raise PolicyViolation(f"'{v}' is not a valid amount") from None
     if d <= 0:
         raise PolicyViolation("amount must be greater than zero")
     return d
@@ -155,7 +155,7 @@ def validate_payment_plan(installments: list[dict], balance: Decimal, today: dat
         try:
             due = date.fromisoformat(str(inst.get("due_date")))
         except ValueError:
-            raise PolicyViolation(f"due_date '{inst.get('due_date')}' must be YYYY-MM-DD", allowed)
+            raise PolicyViolation(f"due_date '{inst.get('due_date')}' must be YYYY-MM-DD", allowed) from None
         if due < today or due <= prev:
             raise PolicyViolation("installment dates must be today or later and in increasing order", allowed)
         prev = due

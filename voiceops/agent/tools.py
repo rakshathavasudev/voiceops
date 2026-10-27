@@ -127,7 +127,6 @@ TOOL_SPECS: list[dict] = [
 for _spec in TOOL_SPECS:
     _spec["strict"] = True
 
-WRITE_ACTIONS = {"payment_link", "payment_plan", "lease_renewal", "tour_booking"}
 
 
 def idempotency_key(org_id: str, conv_id: str, action: str, params: dict) -> str:
@@ -214,7 +213,7 @@ def prepare_payment_link(ctx: ToolContext, amount: str, send_via: str) -> dict:
     try:
         amt = validate_payment_amount(amount, ledger.BalanceDue, ctx.org)
     except PolicyViolation as v:
-        raise ToolBlocked("policy", v.reason, allowed=v.allowed)
+        raise ToolBlocked("policy", v.reason, allowed=v.allowed) from v
     if ctx.services.store.consent(rid, send_via) == "revoked":
         raise ToolBlocked("consent", f"The resident opted out of {send_via}. Offer the other channel.")
     return _set_pending(ctx, "payment_link", {"amount": str(amt), "send_via": send_via},
@@ -228,7 +227,7 @@ def prepare_payment_plan(ctx: ToolContext, installments: list[dict]) -> dict:
     try:
         clean = validate_payment_plan(installments, ledger.BalanceDue, clock.now().date(), ctx.org, bool(ledger.ActivePaymentPlan))
     except PolicyViolation as v:
-        raise ToolBlocked("policy", v.reason, allowed=v.allowed)
+        raise ToolBlocked("policy", v.reason, allowed=v.allowed) from v
     parts = ", ".join(f"${i['amount']} on {date.fromisoformat(i['due_date']):%B %-d}" for i in clean)
     return _set_pending(ctx, "payment_plan", {"installments": clean},
                         f"A payment plan for your ${ledger.BalanceDue} balance in {len(clean)} payments: {parts}")
@@ -331,7 +330,7 @@ def send_message(ctx: ToolContext, channel: str, text: str) -> dict:
     try:
         res = ctx.services.messenger.send(ctx.conv["id"], ctx.conv["subject_id"], channel, _contact(ctx, channel), text[:600], transactional=True)
     except ConsentError as exc:
-        raise ToolBlocked("consent", str(exc))
+        raise ToolBlocked("consent", str(exc)) from exc
     ctx.audit("message.sent", {"channel": channel}, "success")
     return res
 

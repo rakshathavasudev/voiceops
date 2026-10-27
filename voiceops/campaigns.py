@@ -5,7 +5,7 @@ decision (sent or skipped, and why) is recorded so operations can audit the run.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta
+from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from voiceops import clock

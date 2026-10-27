@@ -122,7 +122,7 @@ def create_app(rt: AgentRuntime | None = None) -> FastAPI:
         try:
             return turn_payload(rt.handle_turn(cid, body.channel, body.text))
         except PMSError as exc:
-            raise HTTPException(502, f"system of record error: {exc}")
+            raise HTTPException(502, f"system of record error: {exc}") from exc
 
     @app.post("/api/channels/sms/inbound")
     def sms_inbound(body: SmsIn):
@@ -271,7 +271,7 @@ def create_app(rt: AgentRuntime | None = None) -> FastAPI:
         try:
             return {"decisions": campaigns.run_campaign(rt, name, channel)}
         except ValueError as exc:
-            raise HTTPException(404, str(exc))
+            raise HTTPException(404, str(exc)) from exc
 
     @app.get("/api/pms/state")
     def pms_state():

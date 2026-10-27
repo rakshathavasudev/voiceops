@@ -16,13 +16,11 @@ Thumbs.db
 # Logs
 *.log
 
-# Optional: ignore screenshot placeholder if using a tool-generated one
-# screenshot.png
-
 # Python
 __pycache__/
 *.pyc
 .pytest_cache/
+.ruff_cache/
 .venv/
 *.egg-info/
 

@@ -12,9 +12,19 @@ The interesting part is everything around the model:
 
 ![VoiceOps console](docs/console.png)
 
+```mermaid
+flowchart LR
+  U[Residents and prospects<br/>phone, SMS, web chat, email] <--> TW[Twilio / browser console]
+  TW <--> API[VoiceOps agent platform<br/>FastAPI]
+  API <--> LLM[Claude<br/>or offline scripted model]
+  API --> PMS[(Legacy property system<br/>system of record)]
+  API --> DB[(Store: cases, audit log,<br/>outbox, consent, traces)]
+  API --> HQ[Human escalation queue]
+```
+
 It runs fully offline with no API keys. A deterministic scripted model stands in for the LLM, and the legacy PMS is mocked, so you can demo it anywhere. Set `ANTHROPIC_API_KEY` to run the same agent on Claude, and add Twilio credentials to take real phone calls.
 
-> The original single-file insurance call simulator (v1) is still here: [`insurance-call-simulator.html`](insurance-call-simulator.html).
+> The original single-file insurance call simulator (v1), with its screenshot and demo video, is in [`v1/`](v1/).
 
 ---
 
@@ -35,7 +45,7 @@ Open the console in Chrome, pick **Maria Lopez · Unit 4B**, press **Start conve
 | Frozen clock for demos | `VOICEOPS_NOW=2026-10-27T10:00:00-07:00` (quiet hours and dates become reproducible) |
 
 ```bash
-python -m pytest -q                                   # 39 unit tests
+python -m pytest -q                                   # 40 unit tests
 python -m voiceops.evals                              # 17 eval scenarios, offline
 python -m voiceops.evals --provider claude --trials 3 # the real agent, pass^k over 3 trials
 python -m voiceops.evals --compare evals/baseline.scripted.json   # regression gate (CI)
@@ -106,6 +116,9 @@ config/           per-org policy and handbook
 evals/            scenarios, baseline, reports
 web/console.html  operator console (voice via Web Speech API)
 tests/            unit tests, including a misbehaving-model suite
+docs/             interview demo script and design notes
+render.yaml       one-click Render deployment
+v1/               the original single-file insurance call simulator
 ```
 
 ## Security notes

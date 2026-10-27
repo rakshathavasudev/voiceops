@@ -12,7 +12,6 @@ instead of being replayed in full, keeping context small and latency low.
 from __future__ import annotations
 
 import json
-from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from voiceops import clock
