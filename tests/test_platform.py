@@ -77,6 +77,16 @@ def test_http_api_and_twilio_voice_flow(rt):
     assert api.get("/api/audit").json()["chain"]["valid"]
 
 
+def test_demo_password_guards_console_but_not_twilio(rt, monkeypatch):
+    monkeypatch.setenv("DEMO_PASSWORD", "s3cret")
+    api = TestClient(create_app(rt))
+    assert api.get("/api/info").status_code == 401
+    assert api.get("/api/info", auth=("anyone", "wrong")).status_code == 401
+    assert api.get("/api/info", auth=("anyone", "s3cret")).status_code == 200
+    assert api.get("/healthz").status_code == 200
+    assert api.post("/twilio/voice", data={"From": "+12065550111"}).status_code == 200
+
+
 def test_claude_adapter_request_shape():
     captured = {}
 

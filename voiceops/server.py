@@ -2,7 +2,10 @@
 and admin hooks for demos. Run everything with `python -m voiceops`."""
 from __future__ import annotations
 
+import base64
+import hmac
 import json
+import os
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
@@ -48,6 +51,27 @@ def create_app(rt: AgentRuntime | None = None) -> FastAPI:
     s = rt.s
     app = FastAPI(title="VoiceOps agent platform")
     app.state.rt = rt
+
+    # A public deployment holds an API key and the demo controls, so DEMO_PASSWORD puts the console
+    # and its API behind HTTP basic auth. Twilio webhooks are exempt: they are checked by signature.
+    demo_password = os.environ.get("DEMO_PASSWORD")
+
+    @app.middleware("http")
+    async def require_password(request: Request, call_next):
+        path = request.url.path
+        if not demo_password or path == "/healthz" or path.startswith("/twilio/"):
+            return await call_next(request)
+        try:
+            _, _, given = base64.b64decode(request.headers.get("Authorization", "")[6:]).decode().partition(":")
+        except ValueError:
+            given = ""
+        if hmac.compare_digest(given.encode(), demo_password.encode()):
+            return await call_next(request)
+        return Response("Authentication required", status_code=401, headers={"WWW-Authenticate": 'Basic realm="VoiceOps demo"'})
+
+    @app.get("/healthz")
+    def healthz():
+        return {"ok": True}
 
     def turn_payload(res) -> dict:
         return res.__dict__

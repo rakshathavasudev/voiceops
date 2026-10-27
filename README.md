@@ -45,6 +45,16 @@ The interview walkthrough is in **[docs/DEMO.md](docs/DEMO.md)**. Design notes a
 
 ---
 
+## Deploy to Render
+
+`render.yaml` is a Render Blueprint for one web service that runs both the agent platform and the mock legacy PMS. In Render, choose **New > Blueprint**, pick this repo, and fill in the secrets it asks for:
+
+- `DEMO_PASSWORD` (recommended): puts the console and API behind basic auth, with any username. Twilio webhooks stay open and are checked by signature instead.
+- `ANTHROPIC_API_KEY` (optional): without it the offline scripted model runs.
+- `PUBLIC_BASE_URL`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` (optional): for real calls and texts. Set `PUBLIC_BASE_URL` to the service's `https://….onrender.com` URL, then point the Twilio number's voice webhook at `/twilio/voice` and its messaging webhook at `/twilio/sms`.
+
+Demo data lives in SQLite on the instance's disk, so it resets on each deploy or restart. That suits a demo. The free plan also sleeps when idle, so open the URL a minute before you share your screen.
+
 ## How a turn works
 
 ```mermaid
